@@ -1,0 +1,16 @@
+title Unstake
+
+actor User
+participant Staking
+participant QUAS
+participant sQUAS
+
+
+User->Staking: unstake(amount, trigger)
+alt if (trigger) 
+Staking->Staking: rebase() ...
+end
+Staking->sQUAS: safeTransferFrom(msg.sender, address(this), amount)
+sQUAS->Staking: 
+Staking->QUAS: safeTransfer(msg.sender, amount)
+QUAS->Staking:

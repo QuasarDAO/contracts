@@ -1,0 +1,22 @@
+title Deposit
+
+actor User
+participant Treasury
+participant Token
+participant QUAS
+
+User->Treasury: deposit(uint amount, address token, uint profit)
+Treasury->Treasury: Check is reserveToken\nor is liquidityToken
+Treasury->Token: safeTransferFrom(msg.sender, address(this), amount)
+Token->Treasury:
+alt if reserve token
+Treasury->Treasury: require isReserveTokenManager
+end
+alt if liquidity token
+Treasury->Treasury: require isLiquidityTokenManager
+end
+Treasury->Treasury: valueOf(token, amount)\nconvert amount to match decimals
+Treasury->Treasury: calculate QUAS amount to mint based on profit param
+Treasury->QUAS: mint(msg.sender, send)
+QUAS->Treasury:
+Treasury->Treasury: update totalReserves variable

@@ -1,0 +1,51 @@
+title Stake
+
+actor User
+participant StakingHelper
+participant QUAS
+participant Staking
+participant StakingDestributor
+participant sQUAS
+participant Treasury
+participant StakingWarmup
+
+User->StakingHelper: stake(amount, recipient)
+StakingHelper->QUAS: transferFrom (msg.sender, address(this), amount)
+StakingHelper->QUAS: approve(staking, amount)
+StakingHelper->Staking: stake(amount, recipient)
+Staking->Staking: rebase
+alt if epoch ended
+Staking->sQUAS: rebase(epoch.distribute, epoch.number)
+sQUAS->sQUAS: calculate rebase amount
+sQUAS->sQUAS: update totalSupply
+sQUAS->sQUAS: update gonsPerFragment
+sQUAS->sQUAS: store rebase
+sQUAS->Staking: totalSupply
+Staking->Staking: update epoch.endTime
+Staking->Staking: increment epoch.number
+Staking->StakingDestributor: distribute()
+StakingDestributor->StakingDestributor: calculate rewards
+StakingDestributor->Treasury: mintRewards(recepient, amount) to staking 
+Treasury->Treasury: check amount < excess reserves
+Treasury->QUAS: mint( _recipient, _amount )
+QUAS->Treasury: 
+Treasury->StakingDestributor:
+StakingDestributor->StakingDestributor: adjust rewards rate
+StakingDestributor->Staking: isDestributed
+Staking->Staking: calculate profit
+Staking->Staking: update epoch.distribute
+end
+Staking->QUAS: safeTransferFrom(msg.sender, address(this), amount)
+QUAS->Staking:
+Staking->Staking: update warmup info
+Staking->sQUAS: safeTransfer(warmupContract, _amount)
+sQUAS->Staking:
+Staking->StakingHelper:
+StakingHelper->Staking: claim(recipient)
+alt check warmup info (expiry)
+Staking->StakingWarmup: retrieve(staker, amount)
+StakingWarmup->sQUAS: transfer(staker, amount)
+sQUAS->StakingWarmup:
+StakingWarmup->Staking:
+Staking->StakingHelper:
+end
