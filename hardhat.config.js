@@ -3,11 +3,17 @@ const mnemonic = fs.readFileSync(".secret").toString().trim();
 
 require("@nomiclabs/hardhat-waffle");
 module.exports = {
-  solidity: "0.7.5",
+  solidity: {
+    compilers: [
+      {
+        version: "0.7.5",
+      }
+    ]
+  },
   defaultNetwork: "moonbase",
   networks: {
     moonbase: {
-      url: "https://rpc.testnet.moonbeam.network",
+      url: "https://rpc-mumbai.maticvigil.com/",
       accounts: {
         mnemonic: mnemonic
       }

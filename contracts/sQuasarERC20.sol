@@ -88,6 +88,8 @@ contract sQuasarERC20Token is ERC20Permit, ManagerOwnable {
             emit LogRebase( epoch_, 0, index() );
             return _totalSupply;
         } else if ( circulatingSupply_ > 0 ){
+            // profit / circulatingSupply_ - rebasePercent
+            // rebasePercent * totalSupply - total sQUAS to 'mint'
             rebaseAmount = profit_.mul( _totalSupply ).div( circulatingSupply_ );
         } else {
             rebaseAmount = profit_;

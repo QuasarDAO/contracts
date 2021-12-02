@@ -13,29 +13,30 @@ const initialIndex = '7675210820';
 // Initial reward rate for epoch
 const initialRewardRate = '3000';
 
-// DAI bond BCV
-const daiBondBCV = '369';
-// Bond vesting length in seconds
-const bondVesting = '1800';
-// Min bond price
-const minBondPrice = '10000';
-// Max bond payout
-const maxBondPayout = '50'
-// DAO fee for bond
-const bondFee = '10000';
-// Max debt bond can take on
-const maxBondDebt = '1000000000000000';
-// Initial Bond debt
-const intialBondDebt = '0'
+async function waitSuccess(result) {
+    console.log(`
 
-// Large number for approval for DAI
-const largeApproval = '100000000000000000000000000000000';
-// Initial mint for DAI (10,000,000)
-const initialMint = '10000000000000000000000000';
+    Transaction: ${result.hash}
+
+    🕑 Waiting for it to be processed...
+    `)
+    result = await result.wait()
+    checkSuccess(result) 
+}
+
+function checkSuccess(result) {
+
+    if (result.status === 1) {
+        console.log(`✅ Transaction [${result.transactionHash}] was successful\n\n`)
+    } else {
+        console.log(`❌ Transaction [${result.transactionHash}] failed\n\n`)
+        throw 'Transaction failed'
+    }
+}
 
 async function main() {
 
-    const [deployer, MockDAO] = await ethers.getSigners();
+    const [deployer] = await ethers.getSigners();
     console.log('Deploying contracts with the account: ' + deployer.address);
 
     console.log('Deploying QUAS...')
@@ -50,15 +51,9 @@ async function main() {
     squas = await squas.deployed();
     console.log(`sQUAS: ${squas.address}\n`);
 
-    console.log('Deploying mock DAI...');
-    const DAI = await ethers.getContractFactory('DAI');
-    var dai = await DAI.deploy(0);
-    dai = await dai.deployed();
-    console.log(`mock DAI: ${dai.address}\n`);
-
     console.log('Deploying Treasury...');
     const TREASURY = await ethers.getContractFactory('QuasarTreasury');
-    var treasury = await TREASURY.deploy(quas.address, dai.address, 0);
+    var treasury = await TREASURY.deploy(quas.address, 0);
     treasury = await treasury.deployed();
     console.log(`Treasury: ${treasury.address}\n`);
 
@@ -96,94 +91,64 @@ async function main() {
     staking_helper = await staking_helper.deployed();
     console.log(`StakingHelper: ${staking_helper.address}\n`);
 
-    console.log('Deploying DaiBond...');
-    const BOND_DEPOSITORY = await ethers.getContractFactory('QuasarBondDepository');
-    var dai_bond = await BOND_DEPOSITORY.deploy(
-        quas.address, dai.address, treasury.address, MockDAO.address, zeroAddress); 
-    dai_bond = await dai_bond.deployed();
-    console.log(`DaiBond: ${dai_bond.address}`);
-
     // INITIALIZE
     console.log("Initializing protocol...")
 
     // Initialize sQUAS and set the index
     console.log('squas.initialize(staking.address)')
-    await squas.initialize(staking.address);
+    await waitSuccess(await squas.initialize(staking.address))
     console.log('squas.setIndex(initialIndex)')
-    await squas.setIndex(initialIndex);
+    await waitSuccess(await squas.setIndex(initialIndex))
 
     // Set distributor contract and warmup contract
-    console.log("staking.setContract('0', distributor.address)");
-    await staking.setContract('0', distributor.address);
-    console.log("staking.setContract('1', staking_warmup.address)");
-    await staking.setContract('1', staking_warmup.address);
+    console.log("staking.setContract('0', distributor.address)")
+    await waitSuccess(await staking.setContract('0', distributor.address))
+    console.log("staking.setContract('1', staking_warmup.address)")
+    await waitSuccess(await staking.setContract('1', staking_warmup.address))
 
     // Set treasury for QUAS token
     console.log("quas.setVault(treasury.address)")
-    await quas.setVault(treasury.address);
+    await waitSuccess(await quas.setVault(treasury.address))
 
     // Add staking contract as distributor recipient
     console.log("distributor.addRecipient(staking.address, initialRewardRate)")
-    await distributor.addRecipient(staking.address, initialRewardRate);
+    await waitSuccess(await distributor.addRecipient(staking.address, initialRewardRate))
 
     // queue and toggle reward manager
     console.log("treasury.queue('8', distributor.address)")
-    await treasury.queue('8', distributor.address);
+    await waitSuccess(await treasury.queue('8', distributor.address))
     console.log("treasury.toggle('8', distributor.address, zeroAddress)")
-    await treasury.toggle('8', distributor.address, zeroAddress, {gasLimit: 300000});
+    await waitSuccess(await treasury.toggle('8', distributor.address, zeroAddress, {gasLimit: 300000}))
     // queue and toggle deployer reserve depositor
     console.log("treasury.queue('0', deployer.address)")
-    await treasury.queue('0', deployer.address, {gasLimit: 300000});
+    await waitSuccess(await treasury.queue('0', deployer.address, {gasLimit: 300000}))
     console.log("reasury.toggle('0', deployer.address, zeroAddress)")
-    await treasury.toggle('0', deployer.address, zeroAddress, {gasLimit: 300000});
+    await waitSuccess(await treasury.toggle('0', deployer.address, zeroAddress, {gasLimit: 300000}))
     // queue and toggle liquidity depositor
     console.log("treasury.queue('4', deployer.address)")
-    await treasury.queue('4', deployer.address, {gasLimit: 300000});
+    await waitSuccess(await treasury.queue('4', deployer.address, {gasLimit: 300000}))
     console.log("treasury.toggle('4', deployer.address, zeroAddress)")
-    await treasury.toggle('4', deployer.address, zeroAddress, {gasLimit: 300000});
-    // queue and toggle DAI bond reserve depositor
-    console.log("treasury.queue('0', dai_bond.address)")
-    await treasury.queue('0', dai_bond.address, {gasLimit: 300000});
-    console.log("treasury.toggle('0', dai_bond.address, zeroAddress)")
-    await treasury.toggle('0', dai_bond.address, zeroAddress, {gasLimit: 300000});
-
-    //deposit in treasury
-    console.log("dai.mint(deployer.address, initialMint)")
-    await dai.mint(deployer.address, initialMint);
-    // await dai.approve(treasury.address, largeApproval );
-    // await treasury.deposit('9000000000000000000000000', dai.address, '8400000000000000');
-
-    //init dai bond
-    console.log("dai_bond.initializeBondTerms")
-    await dai_bond.initializeBondTerms(
-        daiBondBCV, minBondPrice, maxBondPayout, bondFee, maxBondDebt, intialBondDebt, bondVesting);
-    console.log("dai_bond.setStaking")
-    await dai_bond.setStaking(staking_helper.address, true);
-    console.log("dai.approve")
-    await dai.approve(dai_bond.address, largeApproval);
+    await waitSuccess(await treasury.toggle('4', deployer.address, zeroAddress, {gasLimit: 300000}))
 
     console.log(`
-        QUAS:           ${quas.address}
-        sQUAS:          ${squas.address}
-        Staking:        ${staking.address}
-        StakingWarmup:  ${staking_warmup.address}
-        StakingHelper:  ${staking_helper.address}
-        Distributor:    ${distributor.address}
-        Treasury:       ${treasury.address}
-        DAI:            ${dai.address}
-        DAI Bond:       ${dai_bond.address}
+        QUAS:              ${quas.address}
+        sQUAS:             ${squas.address}
+        Staking:           ${staking.address}
+        StakingWarmup:     ${staking_warmup.address}
+        StakingHelper:     ${staking_helper.address}
+        Distributor:       ${distributor.address}
+        Treasury:          ${treasury.address}
+        BondingCalculator: ${bonding_calc.address}
+
+        export QUAS=${quas.address}
+        export SQUAS=${squas.address}
+        export STAKING=${staking.address}
+        export STAKING_WARMUP=${staking_warmup.address}
+        export STAKING_HELPER=${staking_helper.address}
+        export DISTRIBUTOR=${distributor.address}
+        export TREASURY=${treasury.address}
+        export BONDING_CALCULATOR=${bonding_calc.address}
     `);
-}
-
-async function main2() {
-
-    const [deployer, MockDAO] = await ethers.getSigners();
-
-    const SQUAS = await ethers.getContractFactory('sQuasarERC20Token');
-    var squas = await SQUAS.attach("0xF0126d5E8E95F6B8Ea215e63f455AD5Ca1DB0684")
-
-    console.log('squas.initialize(staking.address)')
-    await squas.initialize("0x87f152348F6463a274E02F65a8f65cd2271ED6b1");
 }
 
 main()

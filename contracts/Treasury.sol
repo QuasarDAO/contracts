@@ -23,6 +23,8 @@ contract QuasarTreasury is ManagerOwnable {
     event RewardsMinted( address indexed caller, address indexed recipient, uint amount );
     event ChangeQueued( MANAGING indexed managing, address queued );
     event ChangeActivated( MANAGING indexed managing, address activated, bool result );
+    event NewReserveTokenAdded(address indexed token);
+    event NewLiquidityTokenAdded(address indexed token);
 
     enum MANAGING { 
         RESERVEDEPOSITOR, 
@@ -87,15 +89,10 @@ contract QuasarTreasury is ManagerOwnable {
 
     constructor (
         address _QUAS,
-        address _DAI,
         uint _secondsNeededForQueue
     ) {
         require( _QUAS != address(0) );
         QUAS = _QUAS;
-
-        isReserveToken[ _DAI ] = true;
-        reserveTokens.push( _DAI );
-
         secondsNeededForQueue = _secondsNeededForQueue;
     }
 
