@@ -25,7 +25,8 @@
     "compile": "npx hardhat compile",
     "clean": "npx hardhat clean",
     "deploy-protocol": "npx hardhat run scripts/deploy_protocol.js",
-    "deploy-ido": "npx hardhat run scripts/deploy_ido.js"
+    "deploy-mocks": "npx hardhat run scripts/deploy_mocks.js",
+    "deploy-ido-nft": "npx hardhat run scripts/deploy_ido_nft.js"
   },
   "repository": {
     "type": "git",

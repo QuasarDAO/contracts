@@ -25,7 +25,10 @@ async function main() {
     console.log(`
         IDO NFT: ${nft.address}
         Minter:  ${minter.address}
-    `)
+
+        export NFT=${nft.address}
+        export MINTER=${minter.address}
+    `);
 }
 
 main()
@@ -33,4 +36,4 @@ main()
     .catch(error => {
         console.error(error);
         process.exit(1);
-})
+    })

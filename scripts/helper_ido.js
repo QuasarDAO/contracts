@@ -50,7 +50,7 @@ module.exports = {
         const priceInUSD = '150000000000000000000'
         const maxPurchase = '5000000000';
         const bondFee = '1500';
-        const vesting = '1800';
+        const vesting = '32400'; // 9 hours
         console.log("ido_bond.initializeBondTerms")
         await waitSuccess(await ido_bond.initializeBondTerms(price, priceInUSD, maxPurchase, bondFee, vesting));
         

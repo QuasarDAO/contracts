@@ -1,8 +1,8 @@
 const { ethers } = require("hardhat");
 const { waitSuccess } = require("./wait_tx.js")
 
-// const epochLength = 28800; // 8 hours
-const epochLength = 120; // 2 mins
+// const epochLength = ; // 8 hours
+const epochLength = 60 * 60; // 1 hour
 // first epoch number
 const firstEpochNumber = 1;
 

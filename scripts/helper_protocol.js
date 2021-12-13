@@ -71,34 +71,6 @@ module.exports = {
         await waitSuccess(await treasury.deposit(amount, token, profit, {gasLimit: 300000}))
     },
 
-    deployMockDai: async function() {
-
-        console.log('Deploying mock DAI...');
-        const DAI = await ethers.getContractFactory('DAI');
-        var dai = await DAI.deploy(0);
-        dai = await dai.deployed();
-        console.log(`
-            Finished.
-
-            Mock DAI: ${dai.address}
-        
-            `)
-    },
-
-    deployMockFrax: async function() {
-
-        console.log('Deploying mock FRAX...');
-        const FRAX = await ethers.getContractFactory('FRAX');
-        var frax = await FRAX.deploy(0);
-        frax = await frax.deployed();
-        console.log(`
-            Finished.
-
-            Mock FRAX: ${frax.address}
-        
-            `)
-    },
-
     approveERC20: async function(token, amount, to) {
 
         console.log(`Approving [${token}]...`)
