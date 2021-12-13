@@ -1,29 +1,8 @@
-const { EtherscanProvider } = require("@ethersproject/providers");
 const { ethers } = require("hardhat");
+const { waitSuccess } = require("./wait_tx.js")
 
 // Ethereum 0 address, used when toggling changes in treasury
 const zeroAddress = '0x0000000000000000000000000000000000000000';
-
-async function waitSuccess(result) {
-    console.log(`
-
-    Transaction: ${result.hash}
-
-    🕑 Waiting for it to be processed...
-    `)
-    result = await result.wait()
-    checkSuccess(result) 
-}
-
-function checkSuccess(result) {
-
-    if (result.status === 1) {
-        console.log(`✅ Transaction [${result.transactionHash}] was successful\n\n`)
-    } else {
-        console.log(`❌ Transaction [${result.transactionHash}] failed\n\n`)
-        throw 'Transaction failed'
-    }
-}
 
 module.exports = {
 
@@ -102,6 +81,20 @@ module.exports = {
             Finished.
 
             Mock DAI: ${dai.address}
+        
+            `)
+    },
+
+    deployMockFrax: async function() {
+
+        console.log('Deploying mock FRAX...');
+        const FRAX = await ethers.getContractFactory('FRAX');
+        var frax = await FRAX.deploy(0);
+        frax = await frax.deployed();
+        console.log(`
+            Finished.
+
+            Mock FRAX: ${frax.address}
         
             `)
     },
@@ -190,7 +183,7 @@ module.exports = {
         const daiBondBCV = '204';
         const bondVesting = '1800';
         const minBondPrice = '0';
-        const maxBondPayout = '500'
+        const maxBondPayout = '5000'
         const bondFee = '0';
         const maxBondDebt = '1000000000000000';
         const intialBondDebt = '0'
@@ -223,6 +216,33 @@ module.exports = {
 
             LP token: ${lp_token_address}
             LP Bond:  ${lp_bond.address}
+            
+            `)
+    },
+
+    deployLpBondProxy: async function(lp_bond_address, lp_token, tokenA, tokenB) {
+
+        const LP_BOND_PROXY = await ethers.getContractFactory('LPBondProxy');
+
+        console.log('Deploying LP Bond Proxy...');
+
+        var bond_proxy = await LP_BOND_PROXY.deploy(
+            process.env.UNISWAP_V2_ROUTER,
+            lp_bond_address,
+            lp_token,
+            tokenA,
+            tokenB);
+        bond_proxy = await bond_proxy.deployed()
+
+        console.log(`
+            Finished.
+
+            LP Bond Proxy: ${bond_proxy.address}
+            LP Bond: ${lp_bond_address}
+            LP token: ${lp_token}
+            TokenA: ${tokenA}
+            TokenB: ${tokenB}
+
             
             `)
     }
