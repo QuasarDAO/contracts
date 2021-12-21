@@ -1,5 +1,6 @@
 const { ethers } = require("hardhat");
-const { waitSuccess } = require("./wait_tx.js")
+const { waitSuccess, deployContract } = require("./utils.js")
+const { getContractAddress } = require('@ethersproject/address')
 
 // Ethereum 0 address, used when toggling changes in treasury
 const zeroAddress = '0x0000000000000000000000000000000000000000';
@@ -34,23 +35,20 @@ module.exports = {
 
     deployIdoBond: async function(reserve_token_address) {
 
-        const IDO_BOND_DEPOSITORY = await ethers.getContractFactory('QuasarIDOBondDepository');
-
-        console.log('Deploying IDO Bond...')
-        var ido_bond = await IDO_BOND_DEPOSITORY.deploy(
+        var ido_bond = await deployContract('QuasarIDOBondDepository', 
             process.env.QUAS,
+            process.env.SQUAS,
             process.env.NFT,
             reserve_token_address,
             process.env.TREASURY, 
-            process.env.DAO); 
-        ido_bond = await ido_bond.deployed()
+            process.env.DAO);
 
         //init ido bond
         const price = '15000';
         const priceInUSD = '150000000000000000000'
         const maxPurchase = '5000000000';
         const bondFee = '1500';
-        const vesting = '32400'; // 9 hours
+        const vesting = '1800'; // 2.5 hours
         console.log("ido_bond.initializeBondTerms")
         await waitSuccess(await ido_bond.initializeBondTerms(price, priceInUSD, maxPurchase, bondFee, vesting));
         
@@ -65,6 +63,8 @@ module.exports = {
 
         // Set staking for ido bond
         console.log("ido_bond.setStaking")
+        await waitSuccess(await ido_bond.setStaking(process.env.STAKING, false))
+        console.log("ido_bond.setStaking")
         await waitSuccess(await ido_bond.setStaking(process.env.STAKING_HELPER, true))
 
         // Add new reserve token in treasury
@@ -72,6 +72,10 @@ module.exports = {
         await waitSuccess(await treasury.queue('2', reserve_token_address, {gasLimit: 300000}))
         console.log("treasury.toggle('2', reserve_token_address, zeroAddress)")
         await waitSuccess(await treasury.toggle('2', reserve_token_address, zeroAddress, {gasLimit: 300000}))
+
+        // Open IDO
+        console.log("ido_bond.toggleIsOpen()")
+        await waitSuccess(await ido_bond.toggleIsOpen());
 
         console.log(`
             Finished.

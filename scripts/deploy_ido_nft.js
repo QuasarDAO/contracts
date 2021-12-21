@@ -1,22 +1,14 @@
 const { ethers } = require("hardhat");
-const { waitSuccess } = require("./wait_tx.js")
+const { waitSuccess, deployContract } = require("./utils.js")
 
 async function main() {
 
     const [deployer] = await ethers.getSigners();
     console.log('Deploying contracts with the account: ' + deployer.address);
 
-    console.log('Deploying QuasarIDOAccessERC721...')
-    const IDOAccessERC721 = await ethers.getContractFactory('QuasarIDOAccessERC721');
-    const nft = await IDOAccessERC721.deploy();
-    await nft.deployed();
-    console.log(`IDOAccessERC721: ${nft.address}`)
+    const nft = await deployContract('QuasarIDOAccessERC721');
 
-    console.log('Deploying Minter...')
-    const Minter = await ethers.getContractFactory('Minter');
-    const minter = await Minter.deploy(nft.address);
-    await minter.deployed();
-    console.log(`Minter: ${minter.address}`)
+    const minter = await deployContract('Minter', nft.address);
 
     console.log('Transfer ownership of IDOAccessERC721 to Minter')
     await waitSuccess(await nft.transferOwnership(minter.address))

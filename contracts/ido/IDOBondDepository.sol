@@ -3,13 +3,13 @@ pragma solidity 0.7.5;
 
 import "../common/PolicyOwnable.sol";
 import "../common/FixedPoint.sol";
-import "../common/SafeERC20.sol";
 import "../common/SafeMath.sol";
 import "../common/ITreasury.sol";
 import "../common/IStakingHelper.sol";
 import "../common/IStaking.sol";
 import "../common/IBondingCalculator.sol";
 import "./IERC721.sol";
+import "./BondingVault.sol";
 
 contract QuasarIDOBondDepository is PolicyOwnable {
 
@@ -21,7 +21,7 @@ contract QuasarIDOBondDepository is PolicyOwnable {
     /* ======== EVENTS ======== */
 
     event BondCreated( uint deposit, uint indexed payout, uint indexed expires, uint indexed priceInUSD );
-    event BondRedeemed( address indexed recipient, uint payout, uint remaining );
+    event BondRedeemed( address indexed recipient, uint payout, uint stakingProfit );
 
 
 
@@ -29,6 +29,7 @@ contract QuasarIDOBondDepository is PolicyOwnable {
     /* ======== STATE VARIABLES ======== */
 
     address public immutable QUAS; // token given as payment for bond
+    address public immutable sQUAS; // staked 
     address public immutable idoAccessNft; // nft gives access to IDO
     address public immutable principle; // token used to create bond
     address public immutable treasury; // mints QUAS when receives principle
@@ -38,10 +39,11 @@ contract QuasarIDOBondDepository is PolicyOwnable {
     address public stakingHelper; // to stake and claim if no staking warmup
     bool public useHelper;
 
+    bool public isOpen; // toggle bond sales
+
     Terms public terms; // stores terms for new bonds
 
     mapping( address => Bond ) public bondInfo; // stores bond information for depositors
-
 
 
 
@@ -63,6 +65,8 @@ contract QuasarIDOBondDepository is PolicyOwnable {
         uint lastTime; // Last interaction
         uint vesting; // Seconds left to vest
         bool redeemed; // if bond has been redeemed
+        uint redeemedAmount; // amount of QUAS redeemed 
+        address vault; // store sQUAS in the vault to earn staking rewards
     }
 
 
@@ -72,6 +76,7 @@ contract QuasarIDOBondDepository is PolicyOwnable {
 
     constructor ( 
         address _QUAS,
+        address _sQUAS,
         address _nft,
         address _principle,
         address _treasury, 
@@ -79,6 +84,8 @@ contract QuasarIDOBondDepository is PolicyOwnable {
     ) {
         require( _QUAS != address(0) );
         QUAS = _QUAS;
+        require( _sQUAS != address(0) );
+        sQUAS = _sQUAS;
         require( _nft != address(0) );
         idoAccessNft = _nft;
         require( _principle != address(0) );
@@ -131,6 +138,13 @@ contract QuasarIDOBondDepository is PolicyOwnable {
         }
     }
 
+    /**
+     * @notice toggles isOpen flag
+     */
+    function toggleIsOpen() external onlyPolicy() {
+        isOpen = !isOpen;
+    }
+
 
 
 
@@ -147,6 +161,7 @@ contract QuasarIDOBondDepository is PolicyOwnable {
         address _depositor
     ) external returns ( uint ) {
         require( _depositor != address(0), "Invalid address" );
+        require( isOpen == true, 'IDO is closed');
 
         // check the depositor has IDO access NFT
         require(hasAccessToIDO(_depositor), "No access" );
@@ -173,14 +188,24 @@ contract QuasarIDOBondDepository is PolicyOwnable {
         if ( fee != 0 ) { // fee is transferred to team 
             IERC20( QUAS ).safeTransfer( team, fee ); 
         }
-                
-        // depositor info is stored
-        bondInfo[ _depositor ] = Bond({ 
-            payout: bondInfo[ _depositor ].payout.add( payout ),
-            vesting: terms.vestingTerm,
-            lastTime: uint(block.timestamp),
-            redeemed: false
-        });
+
+        // exchange QUAS for sQUAS
+        stakeOrSend( address(this), true, payout );
+
+        address vaultAddress;
+        uint lastTime = bondInfo[ _depositor ].lastTime;
+        if (lastTime == 0) {
+            // create new vault if bond is created
+            BondingVault vault = new BondingVault( sQUAS );
+            vaultAddress = address( vault );
+        } else {
+            // use existing vault if bond is updated
+            vaultAddress = bondInfo[ _depositor ].vault;
+        }
+
+        // deposit squas to the vault
+        IERC20 ( sQUAS ).safeTransfer( vaultAddress, payout );
+        updateBondInfo( _depositor, payout, vaultAddress);
 
         // indexed events are emitted
         emit BondCreated( _amount, payout, block.timestamp.add( terms.vestingTerm ), bondPriceInUSD() );
@@ -194,23 +219,33 @@ contract QuasarIDOBondDepository is PolicyOwnable {
      *  @param _stake bool
      *  @return uint
      */ 
-    function redeem( address _recipient, bool _stake ) external returns ( uint ) {        
+    function redeem( address payable _recipient, bool _stake ) external returns ( uint ) {        
         Bond memory info = bondInfo[ _recipient ];
-        // (seconds since last interaction / vesting term remaining)
-        uint percentVested = percentVestedFor( _recipient );
 
-        if ( percentVested >= 10000 ) { // if fully vested
+        if ( canRedeem( _recipient ) ) {
+            // redeem from the vault and unstake
+            address vaultAddress = bondInfo[ _recipient ].vault;
+            uint redeemed = IBondingVault( vaultAddress ).redeem();
+            IERC20( sQUAS ).approve( staking, redeemed );
+            IStaking( staking ).unstake( redeemed, false );
+
+            // mark bond as redeemed
             bondInfo[ _recipient ].redeemed = true;
-            emit BondRedeemed( _recipient, info.payout, 0 ); // emit bond data
-            return stakeOrSend( _recipient, _stake, info.payout ); // pay user everything due
+            bondInfo[ _recipient ].redeemedAmount = redeemed;
+
+            // calculate staking rewards
+            uint stakingProfit = redeemed - info.payout;
+            emit BondRedeemed( _recipient, info.payout, stakingProfit ); // emit bond data
+
+            // destroy contract to safe some gas
+            IBondingVault( vaultAddress ).destroy( _recipient );
+
+            return stakeOrSend( _recipient, _stake, redeemed ); // pay user everything due
         } else {
             return 0;
         }
     }
 
-
-
-    
     /* ======== INTERNAL HELPER FUNCTIONS ======== */
 
     /**
@@ -296,14 +331,39 @@ contract QuasarIDOBondDepository is PolicyOwnable {
      *  @return pendingPayout_ uint
      */
     function pendingPayoutFor( address _depositor ) external view returns ( uint pendingPayout_ ) {
-        uint percentVested = percentVestedFor( _depositor );
-        uint payout = bondInfo[ _depositor ].payout;
-        bool redeemed = bondInfo[ _depositor ].redeemed;
-
-        if ( percentVested >= 10000 && !redeemed ) {
-            pendingPayout_ = payout;
+        if ( canRedeem( _depositor ) ) {
+            pendingPayout_ = vaultBalance( _depositor );
         } else {
             pendingPayout_ = 0;
+        }
+    }
+
+    /**
+     * @notice checks if depostir can redeem QUAS
+     * @param _depositor address
+     * @return bool
+     */
+    function canRedeem( address _depositor ) public view returns ( bool ) {
+        Bond memory bond = bondInfo[ _depositor ];
+        bool redeemed = bond.redeemed;
+        return !redeemed && percentVestedFor( _depositor ) >= 10000;
+    }
+
+    /**
+     * @notice returns balance of the depositor's bonding vault (purchased + staking rewards)
+     * @param _depositor address
+     * @return balance_ uint
+     */
+    function vaultBalance( address _depositor ) public view returns ( uint balance_ ) {
+        Bond memory bond = bondInfo[ _depositor ];
+        bool redeemed = bond.redeemed;
+        uint lastTime = bond.lastTime;
+
+        if (!redeemed &&  lastTime != 0) {
+            address vaultAddress = bond.vault;
+            balance_ = IERC20( sQUAS ).balanceOf( vaultAddress );
+        } else {
+            balance_ = 0;
         }
     }
 
@@ -314,6 +374,23 @@ contract QuasarIDOBondDepository is PolicyOwnable {
      */
     function hasAccessToIDO( address _depositor ) public view returns (bool) {
         return IERC721 ( idoAccessNft ).balanceOf(_depositor) >= 1;
+    }
+
+    /**
+     * @notice creates or updates depositor's bond information
+     * @param _depositor address
+     * @param _payout uint
+     * @param _vault address
+     */
+    function updateBondInfo( address _depositor, uint _payout, address _vault) internal {
+        bondInfo[ _depositor ] = Bond({ 
+            payout: bondInfo[ _depositor ].payout.add( _payout ),
+            vesting: terms.vestingTerm,
+            lastTime: uint(block.timestamp),
+            redeemed: false,
+            redeemedAmount: 0,
+            vault: _vault
+        });
     }
 
 }

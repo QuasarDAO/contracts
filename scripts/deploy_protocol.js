@@ -1,8 +1,8 @@
 const { ethers } = require("hardhat");
-const { waitSuccess } = require("./wait_tx.js")
+const { waitSuccess, deployContract } = require("./utils.js")
 
 // const epochLength = ; // 8 hours
-const epochLength = 60 * 60; // 1 hour
+const epochLength = 60 * 5; // 5 minute
 // first epoch number
 const firstEpochNumber = 1;
 
@@ -19,57 +19,34 @@ async function main() {
     const [deployer] = await ethers.getSigners();
     console.log('Deploying contracts with the account: ' + deployer.address);
 
-    console.log('Deploying QUAS...')
-    const QUAS = await ethers.getContractFactory('QuasarERC20Token');
-    const quas = await QUAS.deploy();
-    await quas.deployed();
-    console.log(`QUAS: ${quas.address}\n`)
+    const quas = await deployContract('QuasarERC20Token');
 
-    console.log('Deploying sQUAS...');
-    const SQUAS = await ethers.getContractFactory('sQuasarERC20Token');
-    var squas = await SQUAS.deploy();
-    squas = await squas.deployed();
-    console.log(`sQUAS: ${squas.address}\n`);
+    const squas = await deployContract('sQuasarERC20Token');
 
-    console.log('Deploying Treasury...');
-    const TREASURY = await ethers.getContractFactory('QuasarTreasury');
-    var treasury = await TREASURY.deploy(quas.address, 0);
-    treasury = await treasury.deployed();
-    console.log(`Treasury: ${treasury.address}\n`);
+    const treasury = await deployContract('QuasarTreasury', quas.address, 0);
 
-    console.log('Deploying BondingCalculator...');
-    const BONDING_CALC = await ethers.getContractFactory('QuasarBondingCalculator');
-    var bonding_calc = await BONDING_CALC.deploy(quas.address);
-    bonding_calc = await bonding_calc.deployed();
-    console.log(`BondingCalculator: ${bonding_calc.address}\n`);
+    const bonding_calc = await deployContract('QuasarBondingCalculator', quas.address);
 
-    console.log('Deploying StakingDistributor...');
     const latestBlockNumber = await ethers.getDefaultProvider().getBlockNumber();
     const latestBlock = await ethers.getDefaultProvider().getBlock(latestBlockNumber);
-    const DISTRIBUTOR = await ethers.getContractFactory('Distributor');
-    var distributor = await DISTRIBUTOR.deploy(
-        treasury.address, quas.address, epochLength, latestBlock.timestamp);
-    distributor = await distributor.deployed();
-    console.log(`StakingDistributor: ${distributor.address}\n`);
+    const distributor = await deployContract(
+        'Distributor',
+        treasury.address, 
+        quas.address, 
+        epochLength,
+        latestBlock.timestamp);
 
-    console.log('Deploying Staking...');
-    const STAKING = await ethers.getContractFactory('QuasStaking');
-    var staking = await STAKING.deploy(
-        quas.address, squas.address, epochLength, firstEpochNumber, latestBlock.timestamp);
-    staking = await staking.deployed();
-    console.log(`Staking: ${staking.address}\n`);
+    const staking = await deployContract(
+        'QuasStaking',
+        quas.address, 
+        squas.address, 
+        epochLength, 
+        firstEpochNumber, 
+        latestBlock.timestamp);
 
-    console.log('Deploying StakingWarmup...');
-    const STAKING_WARMUP = await ethers.getContractFactory('StakingWarmup');
-    var staking_warmup = await STAKING_WARMUP.deploy(staking.address, squas.address);
-    staking_warmup = await staking_warmup.deployed();
-    console.log(`StakingWarmup: ${staking_warmup.address}\n`);
+    const staking_warmup = await deployContract('StakingWarmup', staking.address, squas.address);
 
-    console.log('Deploying StakingHelper...');
-    const STAKING_HELPER = await ethers.getContractFactory('StakingHelper');
-    var staking_helper = await STAKING_HELPER.deploy(staking.address, quas.address);
-    staking_helper = await staking_helper.deployed();
-    console.log(`StakingHelper: ${staking_helper.address}\n`);
+    const staking_helper = await deployContract('StakingHelper', staking.address, quas.address);
 
     // INITIALIZE
     console.log("Initializing protocol...")
