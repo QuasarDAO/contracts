@@ -36,16 +36,16 @@ contract QuasarBondDepository is QuasarAccessControlled {
     uint256 capacity; // capacity remaining
     bool capacityIsPayout; // capacity limit is for payout vs principal
     uint256 totalDebt; // total debt from bond
-    uint256 lastDecay; // last block when debt was decayed
+    uint256 lastDecay; // last block timestamp when debt was decayed
   }
 
   // Info for creating new bonds
   struct Terms {
     uint256 controlVariable; // scaling variable for price
     bool fixedTerm; // fixed term or fixed expiration
-    uint256 vestingTerm; // term in blocks (fixed-term)
-    uint256 expiration; // block number bond matures (fixed-expiration)
-    uint256 conclusion; // block number bond no longer offered
+    uint256 vestingTerm; // term in seconds (fixed-term)
+    uint256 expiration; // timestamp bond matures (fixed-expiration)
+    uint256 conclusion; // timestamp bond no longer offered
     uint256 minimumPrice; // vs principal value
     uint256 maxPayout; // in thousandths of a %. i.e. 500 = 0.5%
     uint256 maxDebt; // 9 decimal debt ratio, max % total supply created as debt
@@ -106,7 +106,7 @@ contract QuasarBondDepository is QuasarAccessControlled {
       terms: terms, 
       termsSet: false, 
       totalDebt: 0, 
-      lastDecay: block.number, 
+      lastDecay: block.timestamp, 
       capacity: _capacity, 
       capacityIsPayout: _capacityIsPayout
     });
@@ -199,7 +199,7 @@ contract QuasarBondDepository is QuasarAccessControlled {
     Bond memory info = bonds[_BID];
 
     require(bonds[_BID].termsSet, "Not initialized");
-    require(block.number < info.terms.conclusion, "Bond concluded");
+    require(block.timestamp < info.terms.conclusion, "Bond concluded");
 
     emit beforeBond(_BID, bondPriceInUSD(_BID), bondPrice(_BID), debtRatio(_BID));
 
@@ -229,7 +229,7 @@ contract QuasarBondDepository is QuasarAccessControlled {
 
     bonds[_BID].totalDebt = info.totalDebt.add(value); // increase total debt
 
-    uint256 expiration = info.terms.vestingTerm.add(block.number);
+    uint256 expiration = info.terms.vestingTerm.add(block.timestamp);
     if (!info.terms.fixedTerm) {
       expiration = info.terms.expiration;
     }
@@ -250,7 +250,7 @@ contract QuasarBondDepository is QuasarAccessControlled {
    */
   function decayDebt(uint256 _BID) internal {
     bonds[_BID].totalDebt = bonds[_BID].totalDebt.sub(debtDecay(_BID));
-    bonds[_BID].lastDecay = block.number;
+    bonds[_BID].lastDecay = block.timestamp;
   }
 
   /* ======== VIEW FUNCTIONS ======== */
@@ -424,7 +424,7 @@ contract QuasarBondDepository is QuasarAccessControlled {
    */
   function debtDecay(uint256 _BID) public view returns (uint256 decay_) {
     Bond memory bond = bonds[_BID];
-    uint256 blocksSinceLast = block.number.sub(bond.lastDecay);
+    uint256 blocksSinceLast = block.timestamp.sub(bond.lastDecay);
     decay_ = bond.totalDebt.mul(blocksSinceLast).div(bond.terms.vestingTerm);
     if (decay_ > bond.totalDebt) {
       decay_ = bond.totalDebt;

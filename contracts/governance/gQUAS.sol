@@ -8,7 +8,7 @@ import "../interfaces/IsQUAS.sol";
 import "../interfaces/IgQUAS.sol";
 import "../types/ERC20.sol";
 
-contract gQUAS is IgQUAS, ERC20 {
+contract gQuasarERC20Token is IgQUAS, ERC20 {
 
     /* ========== DEPENDENCIES ========== */
 

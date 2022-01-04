@@ -35,17 +35,17 @@ contract QuasarTreasury is QuasarAccessControlled, ITreasury {
     /* ========== DATA STRUCTURES ========== */
 
     enum STATUS {
-        RESERVEDEPOSITOR,
-        RESERVESPENDER,
-        RESERVETOKEN,
-        RESERVEMANAGER,
-        LIQUIDITYDEPOSITOR,
-        LIQUIDITYTOKEN,
-        LIQUIDITYMANAGER,
-        RESERVEDEBTOR,
-        REWARDMANAGER,
-        SQUAS,
-        QUASDEBTOR
+        RESERVEDEPOSITOR, // 0
+        RESERVESPENDER, // 1
+        RESERVETOKEN, // 2
+        RESERVEMANAGER, // 3
+        LIQUIDITYDEPOSITOR, // 4
+        LIQUIDITYTOKEN, // 5
+        LIQUIDITYMANAGER, // 6
+        RESERVEDEBTOR, // 7
+        REWARDMANAGER, // 8
+        SQUAS, // 9
+        QUASDEBTOR // 10
     }
 
     struct Queue {
