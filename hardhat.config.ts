@@ -5,7 +5,6 @@ import "solidity-coverage";
 import "@nomiclabs/hardhat-etherscan";
 import "@nomiclabs/hardhat-ethers";
 import "hardhat-deploy";
-import {task} from 'hardhat/config';
 
 import { resolve } from "path";
 import { config as dotenvConfig } from "dotenv";
@@ -13,11 +12,6 @@ import { config as dotenvConfig } from "dotenv";
 dotenvConfig({ path: resolve(__dirname, "./.env") });
 
 const privateKey = process.env.PRIVATE_KEY ?? "NO_PRIVATE_KEY";
-
-const chainIds = {
-  polygon: 137,
-  mumbai: 80001,
-};
 
 module.exports = {
   paths: {

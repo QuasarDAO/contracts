@@ -5,6 +5,7 @@ interface IStaking {
     function stake(
         address _to,
         uint256 _amount,
+        bool _trigger,
         bool _rebasing,
         bool _claim
     ) external returns (uint256);

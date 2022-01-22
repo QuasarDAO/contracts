@@ -4,7 +4,7 @@ import { QuasarBondDepository__factory } from '../typechain/factories/QuasarBond
 import { waitSuccess } from './utils';
 
 // Add bond parameters
-const principal = '0x4ed7c70F96B99c776995fB64377f0d4aB3B0e1C1';
+const principal = '0x4eD2BF1C1738f3320Cc3Fc36401a4083C4E25d0B';
 const capacity = '100000000000'; //1000 in QUAS
 const capacityIsPayout = true;
 
@@ -12,7 +12,7 @@ const capacityIsPayout = true;
 const bid = 0; // Bond ID
 const bond_bcv = 369; // controll variable
 const fixed_term = true;
-const vesting_term = 1800;
+const vesting_term = 600;
 const expiration = 0; // not used
 const conclusion = 1750013156; // some point in future (2025)
 const minimum_price = 0;

@@ -21,9 +21,9 @@ contract QuasarBondDepository is QuasarAccessControlled {
 
   /* ======== EVENTS ======== */
 
-  event beforeBond(uint256 index, uint256 price, uint256 internalPrice, uint256 debtRatio);
-  event CreateBond(uint256 index, uint256 amount, uint256 payout, uint256 expires);
-  event afterBond(uint256 index, uint256 price, uint256 internalPrice, uint256 debtRatio);
+  event beforeBond(uint256 bid, uint256 price, uint256 internalPrice, uint256 debtRatio);
+  event CreateBond(uint256 bid, uint256 amount, uint256 payout, uint256 expires);
+  event afterBond(uint256 bid, uint256 price, uint256 internalPrice, uint256 debtRatio);
 
   /* ======== STRUCTS ======== */
 
@@ -59,17 +59,13 @@ contract QuasarBondDepository is QuasarAccessControlled {
   ITeller public teller; // handles payment
 
   ITreasury immutable treasury;
-  IERC20 immutable QUAS;
 
   /* ======== CONSTRUCTOR ======== */
 
   constructor(
-    address _QUAS, 
     address _treasury, 
     address _authority
   ) QuasarAccessControlled(IQuasarAuthority(_authority)) {
-    require(_QUAS != address(0));
-    QUAS = IERC20(_QUAS);
     require(_treasury != address(0));
     treasury = ITreasury(_treasury);
   }
@@ -185,7 +181,7 @@ contract QuasarBondDepository is QuasarAccessControlled {
    * @param _depositor address
    * @param _BID uint
    * @param _feo address
-   * @return uint
+   * @return uint256
    */
   function deposit(
     uint256 _amount,
@@ -193,7 +189,7 @@ contract QuasarBondDepository is QuasarAccessControlled {
     address _depositor,
     uint256 _BID,
     address _feo
-  ) external returns (uint256, uint256) {
+  ) external returns (uint256) {
     require(_depositor != address(0), "Invalid address");
 
     Bond memory info = bonds[_BID];
@@ -225,7 +221,8 @@ contract QuasarBondDepository is QuasarAccessControlled {
     require(payout >= 10000000, "Bond too small"); // must be > 0.01 QUAS ( underflow protection )
     require(payout <= maxPayout(_BID), "Bond too large"); // size protection because there is no slippage
 
-    info.principal.safeTransfer(address(treasury), _amount); // send payout to treasury
+    info.principal.safeTransferFrom(msg.sender, address(this), _amount); // move funds from sender
+    info.principal.safeTransfer(address(treasury), _amount); // send funds to treasury
 
     bonds[_BID].totalDebt = info.totalDebt.add(value); // increase total debt
 
@@ -235,11 +232,11 @@ contract QuasarBondDepository is QuasarAccessControlled {
     }
 
     // user info stored with teller
-    uint256 index = teller.newBond(_depositor, address(info.principal), _amount, payout, expiration, _feo);
+    teller.newBond(_BID, _depositor, address(info.principal), _amount, payout, expiration, _feo);
 
     emit CreateBond(_BID, _amount, payout, expiration);
 
-    return (payout, index);
+    return payout;
   }
 
   /* ======== INTERNAL FUNCTIONS ======== */

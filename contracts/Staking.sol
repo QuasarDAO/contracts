@@ -81,6 +81,7 @@ contract QuasarStaking is QuasarAccessControlled {
      * @notice stake QUAS to enter warmup
      * @param _to address
      * @param _amount uint
+     * @param _trigger bool
      * @param _claim bool
      * @param _rebasing bool
      * @return uint
@@ -88,11 +89,16 @@ contract QuasarStaking is QuasarAccessControlled {
     function stake(
         address _to,
         uint256 _amount,
+        bool _trigger,
         bool _rebasing,
         bool _claim
     ) external returns (uint256) {
+        uint256 rebaseBounty;
+        if (_trigger) {
+            rebaseBounty = rebase();
+        }
         QUAS.safeTransferFrom(msg.sender, address(this), _amount);
-        _amount = _amount.add(rebase()); // add bounty if rebase occurred
+        _amount = _amount.add(rebaseBounty); // add bounty if rebase occurred
         if (_claim && warmupPeriod == 0) {
             return _send(_to, _amount, _rebasing);
         } else {

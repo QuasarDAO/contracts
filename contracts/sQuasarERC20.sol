@@ -38,6 +38,7 @@ contract sQuasarERC20Token is IsQUAS, ERC20Permit {
         uint256 amountRebased;
         uint256 index;
         uint256 blockNumberOccured;
+        uint256 blockTimestampOccured;
     }
 
     /* ========== STATE VARIABLES ========== */
@@ -153,7 +154,10 @@ contract sQuasarERC20Token is IsQUAS, ERC20Permit {
         uint256 profit_,
         uint256 epoch_
     ) internal {
-        uint256 rebasePercent = profit_.mul(1e18).div(previousCirculating_);
+        uint256 rebasePercent = 0;
+        if (previousCirculating_ > 0) {
+            rebasePercent = profit_.mul(1e18).div(previousCirculating_);
+        }
         rebases.push(
             Rebase({
                 epoch: epoch_,
@@ -162,7 +166,8 @@ contract sQuasarERC20Token is IsQUAS, ERC20Permit {
                 totalStakedAfter: circulatingSupply(),
                 amountRebased: profit_,
                 index: index(),
-                blockNumberOccured: block.number
+                blockNumberOccured: block.number,
+                blockTimestampOccured: block.timestamp
             })
         );
 

@@ -15,6 +15,8 @@ const func: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
     const stakingDeployment = await deployments.get(CONTRACTS.staking);
     const treasuryDeployment = await deployments.get(CONTRACTS.treasury);
     const bondDepoDeployment = await deployments.get(CONTRACTS.bondDepo);
+    const idoBondDepoDeployment = await deployments.get(CONTRACTS.idoBondDepo);
+    const bondCalcDeployment = await deployments.get(CONTRACTS.bondingCalculator);
     const bondTellerDeployment = await deployments.get(CONTRACTS.teller);
 
     const authorityContractFactory = await ethers.getContractFactory(CONTRACTS.authority);
@@ -25,6 +27,7 @@ const func: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
     const stakingContractFactory = await ethers.getContractFactory(CONTRACTS.staking);
     const treasuryContractFactory = await ethers.getContractFactory(CONTRACTS.treasury);
     const bondDepoFactory = await ethers.getContractFactory(CONTRACTS.bondDepo);
+    const idoBondDepoFactory = await ethers.getContractFactory(CONTRACTS.idoBondDepo);
     const bondTellerFactory = await ethers.getContractFactory(CONTRACTS.teller);
 
     const authority = await authorityContractFactory.attach(authorityDeployment.address);
@@ -35,6 +38,7 @@ const func: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
     const staking = await stakingContractFactory.attach(stakingDeployment.address);
     const treasury = await treasuryContractFactory.attach(treasuryDeployment.address);
     const bondDepo = await bondDepoFactory.attach(bondDepoDeployment.address);
+    const idoBondDepo = await idoBondDepoFactory.attach(idoBondDepoDeployment.address);
     const bondTeller = await bondTellerFactory.attach(bondTellerDeployment.address);
 
     // Step 1: Set treasury as vault on authority
@@ -65,26 +69,28 @@ const func: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
     console.log('Setup -- bondDepo.setTeller')
     await waitSuccess(bondDepo.setTeller(bondTeller.address))
 
-    // Step 7: Set Bond Depository as reserve depositor and liquidity depositor in treasury
+    // Step 7: Set teller in IDO Bond Depository
+    console.log('Setup -- bondDepo.setTeller')
+    await waitSuccess(idoBondDepo.setTeller(bondTeller.address))
+
+    // Step 8: Set Bond Depository as reserve depositor and liquidity depositor in treasury
     console.log('Setup -- treasury.enable(0): Bond Depository enabled to deposit reserves')
     await waitSuccess(treasury.enable(0, bondDepo.address, ethers.constants.AddressZero))
     console.log('Setup -- treasury.enable(4): Bond Depository enabled to deposit liquidity')
     await waitSuccess(treasury.enable(4, bondDepo.address, ethers.constants.AddressZero))
 
-    // Approve staking contact to spend deployer's OHM
-    // TODO: Is this needed?
-    // await ohm.approve(staking.address, LARGE_APPROVAL);
-
     console.log(`
-    Authority:         ${authorityDeployment.address}
-    QUAS:              ${quasDeployment.address}
-    sQUAS:             ${sQuasDeployment.address}
-    gQUAS:             ${gQuasDeployment.address}
-    Distributor:       ${distributorDeployment.address}
-    Staking:           ${stakingDeployment.address}
-    Treasury:          ${treasuryDeployment.address}
-    Bond Depository:   ${bondDepoDeployment.address}
-    Bond Teller:       ${bondTeller.address}
+    Authority:           ${authorityDeployment.address}
+    QUAS:                ${quasDeployment.address}
+    sQUAS:               ${sQuasDeployment.address}
+    gQUAS:               ${gQuasDeployment.address}
+    Distributor:         ${distributorDeployment.address}
+    Staking:             ${stakingDeployment.address}
+    Treasury:            ${treasuryDeployment.address}
+    Bond Depository:     ${bondDepoDeployment.address}
+    IDO Bond Depository: ${idoBondDepoDeployment.address}
+    Bond Calculator:     ${bondCalcDeployment.address}
+    Bond Teller:         ${bondTeller.address}
 
     export AUTHORITY=${authorityDeployment.address}
     export QUAS=${quasDeployment.address}
@@ -94,6 +100,8 @@ const func: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
     export STAKING=${stakingDeployment.address}
     export TREASURY=${treasuryDeployment.address}
     export DEPOSITORY=${bondDepoDeployment.address}
+    export IDO_DEPOSITORY=${idoBondDepoDeployment.address}
+    export CALCULATOR=${bondCalcDeployment.address}
     export TELLER=${bondTellerDeployment.address}
     `);
 };

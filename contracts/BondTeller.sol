@@ -28,7 +28,7 @@ contract BondTeller is ITeller, QuasarAccessControlled {
     /* ========== MODIFIERS ========== */
 
     modifier onlyDepository() {
-        require(msg.sender == depository, "Only depository");
+        require(msg.sender == depository || msg.sender == idoDepository, "Only depository");
         _;
     }
 
@@ -38,8 +38,9 @@ contract BondTeller is ITeller, QuasarAccessControlled {
     struct Bond {
         address principal; // token used to pay for bond
         uint256 principalPaid; // amount of principal token paid for bond
-        uint256 payout; // sQUAS remaining to be paid. agnostic balance
-        uint256 vested; // Block when bond is vested
+        uint256 payout; // QUAS remaining to be paid. agnostic balance
+        uint256 bonded; // QUAS bonded 
+        uint256 vested; // Block timestamp when bond is vested
         uint256 created; // time bond was created
         uint256 redeemed; // time bond was redeemed
     }
@@ -47,13 +48,13 @@ contract BondTeller is ITeller, QuasarAccessControlled {
     /* ========== STATE VARIABLES ========== */
 
     address internal immutable depository; // contract where users deposit bonds
+    address internal immutable idoDepository; // ido depository
     IStaking internal immutable staking; // contract to stake payout
     ITreasury internal immutable treasury;
     IERC20 internal immutable QUAS;
     IsQUAS internal immutable sQUAS; // payment token
 
-    mapping(address => Bond[]) public bonderInfo; // user data
-    mapping(address => uint256[]) public indexesFor; // user bond indexes
+    mapping(address => mapping(uint256 => Bond)) public bonderInfo; // address => bond id => Bond
 
     mapping(address => uint256) public FERs; // front end operator rewards
     uint256 public feReward;
@@ -62,6 +63,7 @@ contract BondTeller is ITeller, QuasarAccessControlled {
 
     constructor(
         address _depository,
+        address _idoDepository,
         address _staking,
         address _treasury,
         address _quas,
@@ -70,6 +72,8 @@ contract BondTeller is ITeller, QuasarAccessControlled {
     ) QuasarAccessControlled(IQuasarAuthority(_authority)) {
         require(_depository != address(0), "Zero address: Depository");
         depository = _depository;
+        require(_depository != address(0), "Zero address: IDO Depository");
+        idoDepository = _idoDepository;
         require(_staking != address(0), "Zero address: Staking");
         staking = IStaking(_staking);
         require(_treasury != address(0), "Zero address: Treasury");
@@ -84,80 +88,62 @@ contract BondTeller is ITeller, QuasarAccessControlled {
 
     /**
      * @notice add new bond payout to user data
+     * @param _bid bond id
      * @param _bonder address
      * @param _principal address
      * @param _principalPaid uint256
      * @param _payout uint256
      * @param _expires uint256
      * @param _feo address
-     * @return index_ uint256
      */
     function newBond(
+        uint256 _bid,
         address _bonder,
         address _principal,
         uint256 _principalPaid,
         uint256 _payout,
         uint256 _expires,
         address _feo
-    ) external override onlyDepository returns (uint256 index_) {
+    ) external override onlyDepository {
         uint256 reward = _payout.mul(feReward).div(10_000);
         treasury.mint(address(this), _payout.add(reward));
 
-        QUAS.approve(address(staking), _payout);
-        staking.stake(address(this), _payout, true, true);
-
         FERs[_feo] = FERs[_feo].add(reward); // front end operator reward
 
-        index_ = bonderInfo[_bonder].length;
+        Bond memory bondInfo = bonderInfo[_bonder][_bid];
+        bonderInfo[_bonder][_bid] = Bond({
+            principal: _principal,
+            principalPaid: bondInfo.principalPaid + _principalPaid,
+            payout: bondInfo.payout + sQUAS.toG(_payout),
+            bonded: bondInfo.bonded + _payout,
+            vested: _expires,
+            created: block.timestamp,
+            redeemed: 0
+        });
 
-        // store bond & stake payout
-        bonderInfo[_bonder].push(
-            Bond({
-                principal: _principal,
-                principalPaid: _principalPaid,
-                payout: sQUAS.toG(_payout),
-                vested: _expires,
-                created: block.timestamp,
-                redeemed: 0
-            })
-        );
+        QUAS.approve(address(staking), _payout);
+        staking.stake(address(this), _payout, false, true, true);
     }
 
     /* ========== INTERACTABLE FUNCTIONS ========== */
 
     /**
-     *  @notice redeems all redeemable bonds
-     *  @param _bonder address
-     *  @return uint256
-     */
-    function redeemAll(address _bonder) external override returns (uint256) {
-        updateIndexesFor(_bonder);
-        return redeem(_bonder, indexesFor[_bonder]);
-    }
-
-    /**
      *  @notice redeem bond for user
      *  @param _bonder address
-     *  @param _indexes calldata uint256[]
-     *  @return uint256
+     *  @param _bid uint256
+     *  @param _unstake bool
      */
-    function redeem(address _bonder, uint256[] memory _indexes) public override returns (uint256) {
-        uint256 dues;
-        for (uint256 i = 0; i < _indexes.length; i++) {
-            Bond memory info = bonderInfo[_bonder][_indexes[i]];
-
-            if (pendingFor(_bonder, _indexes[i]) != 0) {
-                bonderInfo[_bonder][_indexes[i]].redeemed = block.timestamp; // mark as redeemed
-
-                dues = dues.add(info.payout);
+    function redeem(address _bonder, uint256 _bid, bool _unstake) public override {
+        (,,uint256 payout,) = payoutInfo(_bonder, _bid);
+        if (payout != 0) {
+            delete bonderInfo[_bonder][_bid];
+            emit Redeemed(_bonder, payout);
+            if (_unstake) {
+                payUnstaked(_bonder, payout);
+            } else {
+                payStaked(_bonder, payout);
             }
         }
-
-        dues = sQUAS.fromG(dues);
-
-        emit Redeemed(_bonder, dues);
-        pay(_bonder, dues);
-        return dues;
     }
 
     // pay reward to front end operator
@@ -180,65 +166,49 @@ contract BondTeller is ITeller, QuasarAccessControlled {
      *  @notice send payout
      *  @param _amount uint256
      */
-    function pay(address _bonder, uint256 _amount) internal {
+    function payUnstaked(address _bonder, uint256 _amount) internal {
+        sQUAS.approve(address(staking), _amount);
+        staking.unstake(address(this), _amount, false, true);
+        QUAS.safeTransfer(_bonder, _amount);
+    }
+
+    /**
+     *  @notice send payout
+     *  @param _amount uint256
+     */
+    function payStaked(address _bonder, uint256 _amount) internal {
         sQUAS.safeTransfer(_bonder, _amount);
     }
 
     /* ========== VIEW FUNCTIONS ========== */
-
-    /**
-     *  @notice returns indexes of live bonds
-     *  @param _bonder address
-     */
-    function updateIndexesFor(address _bonder) public override {
-        Bond[] memory info = bonderInfo[_bonder];
-        delete indexesFor[_bonder];
-        for (uint256 i = 0; i < info.length; i++) {
-            if (info[i].redeemed == 0) {
-                indexesFor[_bonder].push(i);
-            }
-        }
-    }
 
     // PAYOUT
 
     /**
      * @notice calculate amount of QUAS available for claim for single bond
      * @param _bonder address
-     * @param _index uint256
-     * @return uint256
+     * @param _bid uint256
+     * @return lockedPayout uint256, lockedStakingRewards uint256, pendingPayout uint256, pendingStakingRewards uint256
      */
-    function pendingFor(address _bonder, uint256 _index) public view override returns (uint256) {
-        if (bonderInfo[_bonder][_index].redeemed == 0 && bonderInfo[_bonder][_index].vested <= block.number) {
-            return bonderInfo[_bonder][_index].payout;
-        }
-        return 0;
-    }
+    function payoutInfo(address _bonder, uint256 _bid) public view override 
+        returns (uint256 lockedPayout, uint256 lockedStakingRewards, uint256 pendingPayout, uint256 pendingStakingRewards) {
 
-    /**
-     * @notice calculate amount of QUAS available for claim for array of bonds
-     * @param _bonder address
-     * @param _indexes uint256[]
-     * @return pending_ uint256
-     */
-    function pendingForIndexes(address _bonder, uint256[] memory _indexes) public view override returns (uint256 pending_) {
-        for (uint256 i = 0; i < _indexes.length; i++) {
-            pending_ = pending_.add(pendingFor(_bonder, i));
+        uint256 gpayout = bonderInfo[_bonder][_bid].payout;
+        uint256 bonded = bonderInfo[_bonder][_bid].bonded;
+        uint256 payout = sQUAS.fromG(gpayout);
+        uint256 stakingRewards;
+        if (bonded < payout) {
+            stakingRewards = payout.sub(bonded);
         }
-        pending_ = sQUAS.fromG(pending_);
-    }
 
-    /**
-     *  @notice total pending on all bonds for bonder
-     *  @param _bonder address
-     *  @return pending_ uint256
-     */
-    function totalPendingFor(address _bonder) public view override returns (uint256 pending_) {
-        Bond[] memory info = bonderInfo[_bonder];
-        for (uint256 i = 0; i < info.length; i++) {
-            pending_ = pending_.add(pendingFor(_bonder, i));
+        if (bonderInfo[_bonder][_bid].redeemed == 0 && 
+            bonderInfo[_bonder][_bid].vested <= block.timestamp) {
+            pendingPayout = payout;
+            pendingStakingRewards = stakingRewards;
+        } else {
+            lockedPayout = payout;
+            lockedStakingRewards = stakingRewards;
         }
-        pending_ = sQUAS.fromG(pending_);
     }
 
     // VESTING
@@ -246,11 +216,11 @@ contract BondTeller is ITeller, QuasarAccessControlled {
     /**
      * @notice calculate how far into vesting a depositor is
      * @param _bonder address
-     * @param _index uint256
+     * @param _bid uint256
      * @return percentVested_ uint256
      */
-    function percentVestedFor(address _bonder, uint256 _index) public view override returns (uint256 percentVested_) {
-        Bond memory bond = bonderInfo[_bonder][_index];
+    function percentVestedFor(address _bonder, uint256 _bid) public view override returns (uint256 percentVested_) {
+        Bond memory bond = bonderInfo[_bonder][_bid];
 
         uint256 timeSince = block.timestamp.sub(bond.created);
         uint256 term = bond.vested.sub(bond.created);

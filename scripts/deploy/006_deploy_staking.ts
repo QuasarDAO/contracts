@@ -1,4 +1,4 @@
-import { ethers } from "hardhat";
+import type { ethers } from "ethers";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 import { DeployFunction } from "hardhat-deploy/types";
 import {
@@ -17,7 +17,7 @@ const func: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
     const sQuasDeployment = await deployments.get(CONTRACTS.sQUAS);
     const gQuasDeployment = await deployments.get(CONTRACTS.gQUAS);
 
-    const firstEpochStartTime = await getLatestBlockTimestamp()
+    const firstEpochStartTime = await getLatestBlockTimestamp(hre)
 
     await deploy(CONTRACTS.staking, {
         from: deployer,
@@ -34,7 +34,8 @@ const func: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
     });
 };
 
-async function getLatestBlockTimestamp() {
+async function getLatestBlockTimestamp(hre: HardhatRuntimeEnvironment) {
+    const { ethers } = hre;
     const latestBlockNumber = await ethers.getDefaultProvider().getBlockNumber();
     const latestBlock = await ethers.getDefaultProvider().getBlock(latestBlockNumber);
     return latestBlock.timestamp;
