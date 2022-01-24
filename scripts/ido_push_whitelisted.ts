@@ -3,7 +3,7 @@ import { QuasarIDOBondDepository__factory } from '../typechain/factories/QuasarI
 import { waitSuccess } from './utils';
 import { CONTRACTS } from './constants';
 
-const whitelisted = ["0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"]
+const whitelisted = ["0xA8D98f7a37574dc43e78818F70f7861d42749BA6"]
 
 async function setStage() {
 

@@ -222,7 +222,8 @@ contract QuasarBondDepository is QuasarAccessControlled {
     require(payout <= maxPayout(_BID), "Bond too large"); // size protection because there is no slippage
 
     info.principal.safeTransferFrom(msg.sender, address(this), _amount); // move funds from sender
-    info.principal.safeTransfer(address(treasury), _amount); // send funds to treasury
+    info.principal.approve(address(treasury), _amount);
+    treasury.deposit(_amount, address(info.principal), value);  // deposit funds to treasury
 
     bonds[_BID].totalDebt = info.totalDebt.add(value); // increase total debt
 

@@ -7,10 +7,10 @@ import { CONTRACTS } from './constants';
 const bid = 9999;
 const principal = "0x4ed7c70F96B99c776995fB64377f0d4aB3B0e1C1";
 const vesting_term = 600; // 10 mins
-const price = BigNumber.from("100000000000"); // 100$
+const price = BigNumber.from("10000"); // 100$
 const priceInUSD = BigNumber.from("100000000000000000000"); // 100$
-const maxPurchase = 10; // in QUAS
-const capacity = 5000; // in QUAS
+const maxPurchase = BigNumber.from("10000000000"); // 10 in QUAS
+const capacity = BigNumber.from("5000000000000"); // 5000 in QUAS
 
 async function initializeIdo() {
 

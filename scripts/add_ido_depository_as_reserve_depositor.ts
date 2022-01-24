@@ -3,9 +3,6 @@ import { CONTRACTS } from './constants';
 import { QuasarTreasury__factory } from '../typechain/factories/QuasarTreasury__factory'
 import { waitSuccess } from './utils';
 
-//bond teller
-const reward_manager_address = "0x610178dA211FEF7D417bC0e6FeD39F05609AD788";
-
 async function addReserveDepositor() {
 
     const { getNamedAccounts, deployments, ethers } = hre;
@@ -13,10 +10,11 @@ async function addReserveDepositor() {
     console.log(deployer);
     const signer = await ethers.provider.getSigner(deployer);
     const treasuryDeployment = await deployments.get(CONTRACTS.treasury);
+    const idoBondDeployment = await deployments.get(CONTRACTS.idoBondDepo);
 
     const treasury = QuasarTreasury__factory.connect(treasuryDeployment.address, signer);
     console.log("treasury.enable");
-    await waitSuccess(treasury.enable(8, reward_manager_address, ethers.constants.AddressZero));
+    await waitSuccess(treasury.enable(0, idoBondDeployment.address, ethers.constants.AddressZero));
 }
 
 addReserveDepositor()

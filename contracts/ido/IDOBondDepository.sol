@@ -38,7 +38,7 @@ contract QuasarIDOBondDepository is QuasarAccessControlled {
         uint256 bondId;
         IERC20 principal; // token to accept as payment
         uint256 vestingTerm; // term in seconds (fixed-term)
-        uint256 price; // ido price in QUAS value
+        uint256 price; // ido price in pretty dollars (10000 = 100$)
         uint256 priceInUSD; // ido price in principal
         uint256 maxPurchase; // max allocation in QUAS
         uint256 capacity; // capacity remaining in QUAS
@@ -172,7 +172,8 @@ contract QuasarIDOBondDepository is QuasarAccessControlled {
         require(payout <= maxPayout(msg.sender), "IDO: Max allocation exceeded");
 
         bond.principal.safeTransferFrom(msg.sender, address(this), _amount); // move funds from sender
-        bond.principal.safeTransfer(address(treasury), _amount); // send funds to treasury
+        bond.principal.approve(address(treasury), _amount);
+        treasury.deposit(_amount, address(bond.principal), value);  // deposit funds to treasury
 
         uint256 expiration = bond.vestingTerm.add(block.timestamp);
 
